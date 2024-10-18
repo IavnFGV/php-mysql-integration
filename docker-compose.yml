@@ -1,0 +1,21 @@
+version: '2'
+services:
+  apache_with_php:
+    build: .
+    volumes:
+      - ./src:/var/www/html/
+    ports:
+      - "80:80"
+  mysql:
+    image: mysql:8.0.34
+    container_name: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=secret
+      - MYSQL_DATABASE=naukroom
+      - MYSQL_USER=naukroom_usr
+      - MYSQL_PASSWORD=sk2GU3NXnqsqA472
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "33060:3306"
