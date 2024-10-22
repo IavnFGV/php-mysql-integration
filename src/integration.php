@@ -158,8 +158,25 @@ foreach ($data as $key => $value) {
     foreach ($fieldNames as $field) {
         if (!in_array($field, $allColumns)) {
 
-            if ($field == "2c5ec293caa3c168eeca24869b8b2a0da661710d") {
+
+            if ($field == "2c5ec293caa3c168eeca24869b8b2a0da661710d" ||
+                $field == "1d609cb8de82b88497812f480c6c6b01859cd9c3" ||
+                $field == "ae74cc2b1fa13e336202e634ae1ce15db671ee83" ||
+                $field == "2084777055c8896173bf5046916a3a003c03abbe") {
                 $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($sqlConnect, $field) . "` DATE  AFTER `value`";
+                $add = mysqli_query($sqlConnect, $sql);
+                $log["createColumn"][] = [
+                    "sql" => $sql,
+                    "add" => $add,
+                    "error" => mysqli_error($sqlConnect),
+                ];
+                if ($add != true) {
+                    $log["columnStatus"][] = "errorCreate";
+                }
+                continue;
+            }
+            if ($field == "f96ace3db32b364d4585d683d9ce708d128bdbd9") {
+                $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($sqlConnect, $field) . "` FLOAT  AFTER `value`";
                 $add = mysqli_query($sqlConnect, $sql);
                 $log["createColumn"][] = [
                     "sql" => $sql,
