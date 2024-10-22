@@ -104,10 +104,3 @@ if (strlen($url) < 20 && file_exists("thisUrl")) {
 } else if (strlen($url) > 20) {
     $result["writeurl"] = file_put_contents("thisUrl", $url);
 }
-
-
-if (!function_exists('str_contains')) {
-    function str_contains($haystack, $needle) {
-        return $needle !== '' && mb_strpos($haystack, $needle) !== false;
-    }
-}
