@@ -13,7 +13,7 @@ services:
       - MYSQL_ROOT_PASSWORD=secret
       - MYSQL_DATABASE=naukroom
       - MYSQL_USER=naukroom_usr
-      - MYSQL_PASSWORD=sk2GU3NXnqsqA472
+      - MYSQL_PASSWORD=password
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql

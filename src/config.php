@@ -78,7 +78,7 @@ function getFondySignature( $merchant_id , $password , $params = array() ){
 // DataBase conecting
 $server = "mysql";
 $username = "naukroom_usr";
-$password = "sk2GU3NXnqsqA472";
+$password = "password";
 $database = "naukroom";
 
 mysqli_report(MYSQLI_REPORT_OFF);
