@@ -18,9 +18,9 @@ $previous = $input["previous"];
 
 //send_forward(json_encode($log), $logUrl . "?state=false");
 
-if ($meta == NULL || $data == NULL) {
+if ($meta == NULL) {
     $result["state"] = false;
-    $result["error"]["message"][] = "'entity' is not supported";
+    $result["error"]["message"][] = "'entity' is not supported. meta tag is null";
     $log["result"] = $result;
     echo json_encode($result);
     send_forward(json_encode($log), $logUrl . "?state=false");
@@ -29,6 +29,18 @@ if ($meta == NULL || $data == NULL) {
 
 
 $meta_action = $meta["action"];
+
+if ($meta_action != "delete" && $data == NULL) {
+    $result["state"] = false;
+    $result["error"]["message"][] = "'entity' is not supported. Data is null for meta.action=".$meta_action;
+    $log["result"] = $result;
+    echo json_encode($result);
+    send_forward(json_encode($log), $logUrl . "?state=false");
+    exit;
+}
+
+
+
 
 if ($meta_action == NULL) {
     $result["state"] = false;
