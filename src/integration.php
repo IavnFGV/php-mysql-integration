@@ -52,7 +52,7 @@ if ($meta_action == NULL) {
 }
 
 if ($meta_action == "delete") {
-    $sql = "DELETE FROM `deals` WHERE `dealId` = '" . $data["id"] . "'";
+    $sql = "DELETE FROM `deals` WHERE `deal_id` = '" . $data["id"] . "'";
     $delete = mysqli_query($sqlConnect, $sql);
     $log["delete"] = [
         "sql" => $sql,
