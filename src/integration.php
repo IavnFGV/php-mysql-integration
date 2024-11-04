@@ -74,7 +74,7 @@ if ($meta_action == "delete") {
 }
 
 
-$can_proceed = true
+$can_proceed = true;
     // ($meta_action == "change" && $previous != NULL && $previous["stage_id"] != NULL && $previous["stage_id"] != $data["stage_id"])
     // ||
     // ($meta_action == "create");
