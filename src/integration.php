@@ -51,8 +51,11 @@ if ($meta_action == NULL) {
     exit;
 }
 
+// dealId from meta
+$deal_Id = $meta["entity_id"];
+
 if ($meta_action == "delete") {
-    $sql = "DELETE FROM `deals` WHERE `deal_id` = '" . $data["id"] . "'";
+    $sql = "DELETE FROM `deals` WHERE `deal_id` = '" . $deal_Id . "'";
     $delete = mysqli_query($sqlConnect, $sql);
     $log["delete"] = [
         "sql" => $sql,
@@ -82,7 +85,6 @@ $can_proceed = true;
 
 // dealId from meta
 {
-    $deal_Id = $meta["entity_id"];
     $toSQL[] = "`deal_id` = '" . $deal_Id . "'";
     $fieldNames[] = "deal_id";
 }
