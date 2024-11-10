@@ -42,13 +42,30 @@ def pushDataToCollection(deal):
 #     print(deal)
 
 #
+def remapCustomFields(deal):
+    tempDict={}
+    for key,value in deal["custom_fields"].items():
+        if value != None:
+            tempDict[key] = {"value":value}
+        else:
+            tempDict[key] = None
+    deal["custom_fields"] = tempDict
+
+
+# for deal in mycol.find({"custom_fields.d88705a61d5f8a109cab4994db7105734f6b4234":{"$ne":None}}):
+        # mycol.find({"id":885})):
+        # mycol.find({"custom_fields.d88705a61d5f8a109cab4994db7105734f6b4234":{"$ne:None"}})):
+        # mycol.find({"id":885}):
+        # mycol.find({}):
 for deal in mycol.find({}):
     del deal["_id"]
+    remapCustomFields(deal)
     envelope ={"data":deal}
     meta = {"action":"history_load","entity_id":deal["id"],"correlation_id":str(uuid.uuid4()),"id":str(uuid.uuid4())}
     envelope["meta"]=meta
     URL = "http://localhost:80/integration.php"
     PARAMS = {'XDEBUG_SESSION_START':"IDEA_DEBUG"}
+    print(envelope)
     r = requests.post(url = URL,params=PARAMS, json = envelope)
 
 

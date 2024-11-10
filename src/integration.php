@@ -3,352 +3,239 @@
 $input = json_decode(file_get_contents("php://input"), true);
 include("config.php");
 include("polyfill.php");
+
 $logUrl .= "-webhook";
-
-$log["input"] = [
-    "json" => $input,
-    "post" => $_POST,
-    "get" => $_GET
+$log = [
+    "input" => [
+        "json" => $input,
+        "post" => $_POST,
+        "get" => $_GET
+    ]
 ];
-$result["state"] = true;
 
+$result = ["state" => true];
 $meta = $input["meta"];
 $data = $input["data"];
 $previous = $input["previous"];
 
-//send_forward(json_encode($log), $logUrl . "?state=false");
-
-if ($meta == NULL) {
-    $result["state"] = false;
-    $result["error"]["message"][] = "'entity' is not supported. meta tag is null";
-    $log["result"] = $result;
-    echo json_encode($result);
-    send_forward(json_encode($log), $logUrl . "?state=false");
-    exit;
+if (is_null($meta)) {
+    return respondWithError("'entity' is not supported. meta tag is null");
 }
-
 
 $meta_action = $meta["action"];
-
-if ($meta_action != "delete" && $data == NULL) {
-    $result["state"] = false;
-    $result["error"]["message"][] = "'entity' is not supported. Data is null for meta.action=" . $meta_action;
-    $log["result"] = $result;
-    echo json_encode($result);
-    send_forward(json_encode($log), $logUrl . "?state=false");
-    exit;
+if ($meta_action !== "delete" && is_null($data)) {
+    return respondWithError("'entity' is not supported. Data is null for meta.action={$meta_action}");
 }
 
-
-if ($meta_action == NULL) {
-    $result["state"] = false;
-    $result["error"]["message"][] = "'action' is NULL";
-    echo json_encode($result);
-    $log["result"] = $result;
-    send_forward(json_encode($log), $logUrl . "?state=false");
-    exit;
+if (is_null($meta_action)) {
+    return respondWithError("'action' is NULL");
 }
-
-// dealId from meta
-$deal_Id = $meta["entity_id"];
-
-if ($meta_action == "delete") {
-    $sql = "DELETE FROM `deals` WHERE `deal_id` = '" . $deal_Id . "'";
-    $delete = mysqli_query($sqlConnect, $sql);
-    $log["delete"] = [
-        "sql" => $sql,
-        "query" => $delete,
-        "affected" => mysqli_affected_rows($sqlConnect),
-        "error" => mysqli_error($sqlConnect),
-    ];
-    $sql = sprintf("INSERT INTO `loging` (`data`, `description`,`correlation_id`,`meta_id`) VALUES ('%s','%s','%s','%s')",
-        mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
-        'deleted deal',
-        $meta["correlation_id"],
-        $meta["id"]);
-    $insert = mysqli_query($sqlConnect, $sql);
-    if ($insert == false) {
-        send_forward(json_encode($log), $logUrl . "?state=false");
-    }
-    echo json_encode($result);
-    exit;
-}
-
+$deal_id = $meta["entity_id"];
 $MAX_DEAL_ID = 110474;
-
-if ($meta_action == "history_load") {
-
-    if ($deal_Id > $MAX_DEAL_ID) {
-        $log["history_load"] = "SKIPPED as id > " . $MAX_DEAL_ID;
-        $sql = sprintf("INSERT INTO `loging` (`data`, `description`,`correlation_id`,`meta_id`) VALUES ('%s','%s','%s','%s')",
-            mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
-            'deleted deal',
-            $meta["correlation_id"],
-            $meta["id"]);
-        $insert = mysqli_query($sqlConnect, $sql);
-        if ($insert == false) {
-            send_forward(json_encode($log), $logUrl . "?state=false");
-        }
-        echo json_encode($result);
+switch ($meta_action) {
+    case "delete":
+        processDelete($deal_id, $meta);
         exit;
-    }
 
-    $sql = "SELECT `value` FROM `additional_values` WHERE `name` = 'history_load_last_id'";
+    case "history_load":
+        if ($deal_id > $MAX_DEAL_ID || isAlreadyInDatabase($deal_id)) {
+            logAndExit("SKIPPED as id > {$MAX_DEAL_ID} or already processed", $meta);
+        }
+        break;
+}
 
-    $select = mysqli_query($sqlConnect, $sql);
-    $row = mysqli_fetch_assoc($select);
+// Proceed with deal creation or update
+$toSQL=[];
+prepareSQLFields($data, $meta, $fieldNames);
+insertOrUpdateDeal($fieldNames, $deal_id);
+logFinalResult($meta);
+echo json_encode($result);
 
-    if ($row['value'] != null) {
-        $last_id = intval($row['value']);
-        if ($last_id >= $deal_Id) {
+// Functions
+function respondWithError($message)
+{
+    global $log, $logUrl;
+    $result["state"] = false;
+    $result["error"]["message"][] = $message;
+    $log["result"] = $result;
+    echo json_encode($result);
+    send_forward(json_encode($log), "{$logUrl}?state=false");
+    return false;
+}
 
-            $log["history_load"] = "SKIPPED as already was processed";
-            $sql = sprintf("INSERT INTO `loging` (`data`, `description`,`correlation_id`,`meta_id`) VALUES ('%s','%s','%s','%s')",
-                mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
-                'SKIPPED request',
-                $meta["correlation_id"],
-                $meta["id"]);
-            $insert = mysqli_query($sqlConnect, $sql);
-            if ($insert == false) {
-                send_forward(json_encode($log), $logUrl . "?state=false");
+function processDelete($dealId, $meta)
+{
+    global $result;
+    $sql = "DELETE FROM `deals` WHERE `deal_id` = '{$dealId}'";
+    executeQuery($sql, "delete");
+    logOperation($meta, 'deleted deal');
+    echo json_encode($result);
+}
+
+function isAlreadyInDatabase($deal_id)
+{
+    $sql = "SELECT `deal_id` FROM `deals` WHERE `deal_id` = {$deal_id}";
+    $query = executeQuery($sql,"is_already_in_database");
+    $row = mysqli_fetch_assoc($query);
+    return !is_null($row['deal_id']) && intval($row['deal_id']) == $deal_id;
+}
+
+function logAndExit($message, $meta)
+{
+    global $logUrl, $result, $log;
+    $log["history_load"] = $message;
+    logOperation($meta, 'SKIPPED request');
+    send_forward(json_encode($log), "{$logUrl}?state=false");
+    echo json_encode($result);
+    exit;
+}
+
+function prepareSQLFields($data, $meta, &$fieldNames)
+{
+    global $deal_id,$toSQL;
+    addMetaFields($meta, $fieldNames);
+
+    foreach ($data as $key => $value) {
+        if ($key == "id") continue;
+
+        if (str_contains($key, "custom_fields") && !is_null($value)) {
+            foreach ($value as $element_key => $element) {
+                if (!is_null($element["value"])) {
+                    $toSQL[] = "`{$element_key}` = '{$element["value"]}'";
+                    $fieldNames[] = $element_key;
+                }
             }
-            echo json_encode($result);
-            exit;
+            continue;
+        }
+
+        if (str_contains($key, "label_ids") && !is_null($value)) {
+            $toSQL[] = "`{$key}` = '" . implode(",", $value) . "'";
+            $fieldNames[] = $key;
+            continue;
+        }
+
+        if (is_array($value)) continue;
+
+        if (str_contains($key, "_time") && !is_null($value)) {
+            addTimeFields($key, $value,$fieldNames);
+            continue;
+        }
+
+        if (!is_null($value)) {
+            $toSQL[] = "`{$key}` = '{$value}'";
+            $fieldNames[] = $key;
         }
     }
-
-    $sql = "SELECT `deal_id` FROM `deals` WHERE `deal_id` = " . $deal_Id;
-
-    $sql_result = mysqli_query($sqlConnect, $sql);
-
-    if (mysqli_num_rows($sql_result) > 0) {
-        $sql1 = "UPDATE `additional_values` set `value` = " . $deal_Id . " WHERE `name` = 'history_load_last_id'";
-        mysqli_query($sqlConnect, $sql1);
-
-        $log["history_load"] = "SKIPPED as ID is already in database";
-        $sql = sprintf("INSERT INTO `loging` (`data`, `description`,`correlation_id`,`meta_id`) VALUES ('%s','%s','%s','%s')",
-            mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
-            'SKIPPED request',
-            $meta["correlation_id"],
-            $meta["id"]);
-        $insert = mysqli_query($sqlConnect, $sql);
-        if ($insert == false) {
-            send_forward(json_encode($log), $logUrl . "?state=false");
-        }
-        echo json_encode($result);
-        exit;
-    }
-
-
 }
 
-
-$can_proceed = true;
-// ($meta_action == "change" && $previous != NULL && $previous["stage_id"] != NULL && $previous["stage_id"] != $data["stage_id"])
-// ||
-// ($meta_action == "create");
-
-
-// dealId from meta
+function addMetaFields($meta, &$fieldNames)
 {
-    $toSQL[] = "`deal_id` = '" . $deal_Id . "'";
+    global $toSQL;
+    $toSQL[] = "`deal_id` = '{$meta["entity_id"]}'";
+    $toSQL[] = "`correlation_id` = '{$meta["correlation_id"]}'";
+    $toSQL[] = "`meta_id` = '{$meta["id"]}'";
+
     $fieldNames[] = "deal_id";
-}
-
-{
-    $toSQL[] = "`correlation_id` = '" . $meta["correlation_id"] . "'";
     $fieldNames[] = "correlation_id";
-}
-
-{
-    $toSQL[] = "`meta_id` = '" . $meta["id"] . "'";
     $fieldNames[] = "meta_id";
 }
 
-
-if (!$can_proceed) {
-    echo json_encode($result);
-    exit;
-}
-
-
-foreach ($data as $key => $value) {
-    if ($key == "id") {
-        continue;
-    }
-    if (str_contains($key, "custom_fields")) {
-        if ($value != NULL) {
-            foreach ($value as $element_key => $element) {
-                if ($element["value"] == NULL) {
-                    continue;
-                }
-
-                $toSQL[] = "`" . $element_key . "` = '" . $element["value"] . "'";
-                $fieldNames[] = $element_key;
-            }
-        }
-        continue;
-    }
-    if (str_contains($key, "label_ids")) {
-        if ($value != NULL) {
-            $toSQL[] = "`" . $key . "` = '" . implode(",", $value) . "'";
-            $fieldNames[] = $element_key;
-        }
-        continue;
-    }
-    if (is_array($value)) {
-        // echo 'Skipped for '.$key;
-        continue;
-    }
-    // echo 'Your key is: ' . $key . ' and the value of the key is:' . $value;
-    if (str_contains($key, "_time")) {
-        if ($value == NULL) {
-            continue;
-        }
-        $sysTimeZone = date_default_timezone_get();
-        date_default_timezone_set("UTC");
-        $tempDate = strtotime($value);
-        date_default_timezone_set($sysTimeZone);
-        $toSQL[] = "`" . $key . "` = '" . date("Y-m-d H:i:s", $tempDate) . "'";
-
-//        $toSQL[] ="`".$key."_kiev` = '".date("Y-m-d H:i:s", $value)."'";
-
-        $toSQL[] = "`" . $key . "Unix` = '" . $tempDate . "'";
-        $fieldNames[] = $key;
-        $fieldNames[] = "{$key}Unix";
-//        $fieldNames[]= "{$key}_kiev";
-        continue;
-    }
-    if ($value != NUll) {
-        $toSQL[] = "`" . $key . "` = '" . $value . "'";
-        $fieldNames[] = $key;
-    }
-
-}
-
-
-// Додавання стовпців
+function addTimeFields($key, $value, &$fieldNames)
 {
-    $sql = "SHOW COLUMNS FROM `deals`";
-    $getColumns = mysqli_fetch_all(mysqli_query($sqlConnect, $sql), MYSQLI_ASSOC);
-    foreach ($getColumns as $oneColumn) {
-        $allColumns[] = $oneColumn["Field"];
+    global $toSQL;
+    $sysTimeZone = date_default_timezone_get();
+    date_default_timezone_set("UTC");
+    $tempDate = strtotime($value);
+    date_default_timezone_set($sysTimeZone);
+
+    $toSQL[] = "`{$key}` = '" . date("Y-m-d H:i:s", $tempDate) . "'";
+    $toSQL[] = "`{$key}Unix` = '{$tempDate}'";
+
+    $fieldNames[] = $key;
+    $fieldNames[] = "{$key}Unix";
+}
+
+function insertOrUpdateDeal( $fieldNames, $deal_Id)
+{
+    global $toSQL;
+    checkAndCreateColumns($fieldNames);
+    $sql = "INSERT INTO `deals` SET " . implode(", ", $toSQL);
+    executeQuery($sql, "insert");
+    updateHistoryLoad($deal_Id);
+}
+
+/**
+ * @param $deal_Id
+ * @return void
+ */
+function updateHistoryLoad($deal_Id): void
+{
+    global $meta_action;
+    if($meta_action!="history_load"){
+        return;
     }
+    $sql = "UPDATE `additional_values` SET `value` = {$deal_Id} WHERE `name` = 'history_load_last_id'";
+    executeQuery($sql,"update_history_load");
+}
+
+function checkAndCreateColumns($fieldNames)
+{
+    global $sqlConnect;
+    $sql = "SHOW COLUMNS FROM `deals`";
+    $columns = array_column(mysqli_fetch_all(mysqli_query($sqlConnect, $sql), MYSQLI_ASSOC), "Field");
 
     foreach ($fieldNames as $field) {
-        if (!in_array($field, $allColumns)) {
-
-
-            if ($field == "2c5ec293caa3c168eeca24869b8b2a0da661710d" ||
-                $field == "1d609cb8de82b88497812f480c6c6b01859cd9c3" ||
-                $field == "ae74cc2b1fa13e336202e634ae1ce15db671ee83" ||
-                $field == "2084777055c8896173bf5046916a3a003c03abbe") {
-                $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($sqlConnect, $field) . "` DATE  AFTER `value`";
-                $add = mysqli_query($sqlConnect, $sql);
-                $log["createColumn"][] = [
-                    "sql" => $sql,
-                    "add" => $add,
-                    "error" => mysqli_error($sqlConnect),
-                ];
-                if ($add != true) {
-                    $log["columnStatus"][] = "errorCreate";
-                }
-                continue;
-            }
-            if ($field == "f96ace3db32b364d4585d683d9ce708d128bdbd9") {
-                $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($sqlConnect, $field) . "` FLOAT  AFTER `value`";
-                $add = mysqli_query($sqlConnect, $sql);
-                $log["createColumn"][] = [
-                    "sql" => $sql,
-                    "add" => $add,
-                    "error" => mysqli_error($sqlConnect),
-                ];
-                if ($add != true) {
-                    $log["columnStatus"][] = "errorCreate";
-                }
-                continue;
-            }
-
-            if (str_contains($field, "_timeUnix")) {
-                $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($sqlConnect, $field) . "` BIGINT AFTER `value`";
-                $add = mysqli_query($sqlConnect, $sql);
-                $log["createColumn"][] = [
-                    "sql" => $sql,
-                    "add" => $add,
-                    "error" => mysqli_error($sqlConnect),
-                ];
-                if ($add != true) {
-                    $log["columnStatus"][] = "errorCreate";
-                }
-                continue;
-            }
-            if (str_contains($field, "_time")) {
-                $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($sqlConnect, $field) . "` DATETIME  AFTER `value`";
-                $add = mysqli_query($sqlConnect, $sql);
-                $log["createColumn"][] = [
-                    "sql" => $sql,
-                    "add" => $add,
-                    "error" => mysqli_error($sqlConnect),
-                ];
-                if ($add != true) {
-                    $log["columnStatus"][] = "errorCreate";
-                }
-                continue;
-            }
-
-            if (str_ends_with($field, "_id")) {
-                $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($sqlConnect, $field) . "` BIGINT AFTER `value`";
-                $add = mysqli_query($sqlConnect, $sql);
-                $log["createColumn"][] = [
-                    "sql" => $sql,
-                    "add" => $add,
-                    "error" => mysqli_error($sqlConnect),
-                ];
-                if ($add != true) {
-                    $log["columnStatus"][] = "errorCreate";
-                }
-                continue;
-            }
-
-
-            $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($sqlConnect, $field) . "` TEXT AFTER `value`";
-            $add = mysqli_query($sqlConnect, $sql);
-            $log["createColumn"][] = [
-                "sql" => $sql,
-                "add" => $add,
-                "error" => mysqli_error($sqlConnect),
-            ];
-            if ($add != true) {
-                $log["columnStatus"][] = "errorCreate";
-                continue;
-            }
+        if (!in_array($field, $columns)) {
+            createColumn($field);
         }
     }
 }
 
+function createColumn($field)
+{
+    global $sqlConnect;
+    $type = "TEXT";
+    if ($field === "f96ace3db32b364d4585d683d9ce708d128bdbd9") $type = "FLOAT";
+    elseif ($field == "2c5ec293caa3c168eeca24869b8b2a0da661710d" ||
+        $field == "1d609cb8de82b88497812f480c6c6b01859cd9c3" ||
+        $field == "ae74cc2b1fa13e336202e634ae1ce15db671ee83" ||
+        $field == "2084777055c8896173bf5046916a3a003c03abbe") $type = 'DATE';
+    elseif (str_ends_with($field, "_timeUnix") || str_ends_with($field, "_id")) $type = "BIGINT";
+    elseif (str_ends_with($field, "_time")) $type = "DATETIME";
 
-// Додавання в таблицю
-$sql = "INSERT INTO `deals` SET " . implode(", ", $toSQL);
-$insert = mysqli_query($sqlConnect, $sql);
-$log["to sql"] = [
-    "request" => $sql,
-    "insert" => $insert,
-    "id" => mysqli_insert_id($sqlConnect),
-    "error" => mysqli_error($sqlConnect),
-];
-
-$sql1 = "UPDATE `additional_values` set `value` = " . $deal_Id . " WHERE `name` = 'history_load_last_id'";
-mysqli_query($sqlConnect, $sql1);
-
-
-$sql = sprintf("INSERT INTO `loging` (`data`,`correlation_id`,`meta_id`) VALUES ('%s','%s','%s')",
-    mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
-    $meta["correlation_id"],
-    $meta["id"]
-);
-$insert = mysqli_query($sqlConnect, $sql);
-if (!$insert) {
-    send_forward(json_encode($log), $logUrl . "?state=false");
+    $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($sqlConnect, $field) . "` {$type} AFTER `value`";
+    executeQuery($sql, "createColumn");
 }
-echo json_encode($result);
+
+function executeQuery($sql, $type)
+{
+    global $sqlConnect, $log;
+    $query = mysqli_query($sqlConnect, $sql);
+    $log[$type] = [
+        "sql" => $sql,
+        "affected" => mysqli_affected_rows($sqlConnect),
+        "error" => mysqli_error($sqlConnect),
+    ];
+    return $query;
+}
+
+function logOperation($meta, $description)
+{
+    global $sqlConnect, $log, $logUrl;
+    $sql = sprintf("INSERT INTO `loging` (`data`, `description`, `correlation_id`, `meta_id`) VALUES ('%s', '%s', '%s', '%s')",
+        mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
+        $description,
+        $meta["correlation_id"],
+        $meta["id"]);
+    $query = executeQuery($sql, "logOperation");
+    if (!$query) {
+        send_forward(json_encode($log), "{$logUrl}?state=false");
+    }
+}
+
+function logFinalResult($meta)
+{
+    logOperation($meta, 'Final result logged');
+}
+
 ?>

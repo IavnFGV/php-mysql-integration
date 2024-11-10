@@ -1,5 +1,13 @@
 use naukroom;
 
+create table additional_values
+(
+    name  char(40) not null
+        primary key,
+    value text     null
+);
+
+insert into additional_values(name, value) values ('history_load_last_id','0');
 
 create table deals
 (
