@@ -32,14 +32,12 @@ $meta_action = $meta["action"];
 
 if ($meta_action != "delete" && $data == NULL) {
     $result["state"] = false;
-    $result["error"]["message"][] = "'entity' is not supported. Data is null for meta.action=".$meta_action;
+    $result["error"]["message"][] = "'entity' is not supported. Data is null for meta.action=" . $meta_action;
     $log["result"] = $result;
     echo json_encode($result);
     send_forward(json_encode($log), $logUrl . "?state=false");
     exit;
 }
-
-
 
 
 if ($meta_action == NULL) {
@@ -76,11 +74,79 @@ if ($meta_action == "delete") {
     exit;
 }
 
+$MAX_DEAL_ID = 110474;
+
+if ($meta_action == "history_load") {
+
+    if ($deal_Id > $MAX_DEAL_ID) {
+        $log["history_load"] = "SKIPPED as id > " . $MAX_DEAL_ID;
+        $sql = sprintf("INSERT INTO `loging` (`data`, `description`,`correlation_id`,`meta_id`) VALUES ('%s','%s','%s','%s')",
+            mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
+            'deleted deal',
+            $meta["correlation_id"],
+            $meta["id"]);
+        $insert = mysqli_query($sqlConnect, $sql);
+        if ($insert == false) {
+            send_forward(json_encode($log), $logUrl . "?state=false");
+        }
+        echo json_encode($result);
+        exit;
+    }
+
+    $sql = "SELECT `value` FROM `additional_values` WHERE `name` = 'history_load_last_id'";
+
+    $select = mysqli_query($sqlConnect, $sql);
+    $row = mysqli_fetch_assoc($select);
+
+    if ($row['value'] != null) {
+        $last_id = intval($row['value']);
+        if ($last_id >= $deal_Id) {
+
+            $log["history_load"] = "SKIPPED as already was processed";
+            $sql = sprintf("INSERT INTO `loging` (`data`, `description`,`correlation_id`,`meta_id`) VALUES ('%s','%s','%s','%s')",
+                mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
+                'SKIPPED request',
+                $meta["correlation_id"],
+                $meta["id"]);
+            $insert = mysqli_query($sqlConnect, $sql);
+            if ($insert == false) {
+                send_forward(json_encode($log), $logUrl . "?state=false");
+            }
+            echo json_encode($result);
+            exit;
+        }
+    }
+
+    $sql = "SELECT `deal_id` FROM `deals` WHERE `deal_id` = " . $deal_Id;
+
+    $sql_result = mysqli_query($sqlConnect, $sql);
+
+    if (mysqli_num_rows($sql_result) > 0) {
+        $sql1 = "UPDATE `additional_values` set `value` = " . $deal_Id . " WHERE `name` = 'history_load_last_id'";
+        mysqli_query($sqlConnect, $sql1);
+
+        $log["history_load"] = "SKIPPED as ID is already in database";
+        $sql = sprintf("INSERT INTO `loging` (`data`, `description`,`correlation_id`,`meta_id`) VALUES ('%s','%s','%s','%s')",
+            mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
+            'SKIPPED request',
+            $meta["correlation_id"],
+            $meta["id"]);
+        $insert = mysqli_query($sqlConnect, $sql);
+        if ($insert == false) {
+            send_forward(json_encode($log), $logUrl . "?state=false");
+        }
+        echo json_encode($result);
+        exit;
+    }
+
+
+}
+
 
 $can_proceed = true;
-    // ($meta_action == "change" && $previous != NULL && $previous["stage_id"] != NULL && $previous["stage_id"] != $data["stage_id"])
-    // ||
-    // ($meta_action == "create");
+// ($meta_action == "change" && $previous != NULL && $previous["stage_id"] != NULL && $previous["stage_id"] != $data["stage_id"])
+// ||
+// ($meta_action == "create");
 
 
 // dealId from meta
@@ -270,6 +336,10 @@ $log["to sql"] = [
     "id" => mysqli_insert_id($sqlConnect),
     "error" => mysqli_error($sqlConnect),
 ];
+
+$sql1 = "UPDATE `additional_values` set `value` = " . $deal_Id . " WHERE `name` = 'history_load_last_id'";
+mysqli_query($sqlConnect, $sql1);
+
 
 $sql = sprintf("INSERT INTO `loging` (`data`,`correlation_id`,`meta_id`) VALUES ('%s','%s','%s')",
     mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
