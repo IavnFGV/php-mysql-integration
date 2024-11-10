@@ -61,13 +61,21 @@ for deal in mycol.find({}):
     del deal["_id"]
     remapCustomFields(deal)
     envelope ={"data":deal}
-    meta = {"action":"history_load","entity_id":deal["id"],"correlation_id":str(uuid.uuid4()),"id":str(uuid.uuid4())}
+    meta = {"action":"history_load","entity_id":deal["id"],"correlation_id":deal['correlation_id'],"id":str(uuid.uuid4())}
+    del deal['correlation_id']
     envelope["meta"]=meta
-    URL = "http://localhost:80/integration.php"
-    PARAMS = {'XDEBUG_SESSION_START':"IDEA_DEBUG"}
+    URL = "https://mufiksoft.com/naukroom2/integration.php"
+    # URL = "http://localhost:80/integration.php"
+    # PARAMS = {'XDEBUG_SESSION_START':"IDEA_DEBUG"}
     print(envelope)
-    r = requests.post(url = URL,params=PARAMS, json = envelope)
+    r = requests.post(url = URL,params={}, json = envelope)
 
+# mycol.update({"id":1},{"$set":{"correlation_id":str(uuid.uuid4())}})
 
+# mycol = mycol.create_index({"id":1})
+# for i in range(19000,110705):
+#     mycol.update_one({"id":i},{"$set":{"correlation_id":str(uuid.uuid4())}})
+#     if(i % 1000 == 0):
+#         print(i)
 
 

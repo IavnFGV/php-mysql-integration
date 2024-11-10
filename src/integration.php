@@ -1,241 +1,236 @@
 <?php
 
-$input = json_decode(file_get_contents("php://input"), true);
 include("config.php");
 include("polyfill.php");
+$dealProcessor = new DealProcessor($sqlConnect, $logUrl);
 
-$logUrl .= "-webhook";
-$log = [
-    "input" => [
-        "json" => $input,
-        "post" => $_POST,
-        "get" => $_GET
-    ]
-];
+$dealProcessor->process();
+class DealProcessor
+{
+    private $input;
+    private $logUrl;
+    private $log = [];
+    private $result = ["state" => true];
+    private $toSQL = [];
+    private $fieldNames = [];
+    private $MAX_DEAL_ID = 110474;
+    private $sqlConnect;
 
-$result = ["state" => true];
-$meta = $input["meta"];
-$data = $input["data"];
-$previous = $input["previous"];
+    public function __construct($sqlConnect, $logUrl)
+    {
+        $this->input = json_decode(file_get_contents("php://input"), true);
+        $this->logUrl = $logUrl . "-webhook";
+        $this->sqlConnect = $sqlConnect;
+        $this->log["input"] = [
+            "json" => $this->input,
+            "post" => $_POST,
+            "get" => $_GET
+        ];
+    }
 
-if (is_null($meta)) {
-    return respondWithError("'entity' is not supported. meta tag is null");
-}
+    public function process()
+    {
+        $meta = $this->input["meta"] ?? null;
+        $data = $this->input["data"] ?? null;
+        $meta_action = $meta["action"] ?? null;
+        $deal_id = $meta["entity_id"] ?? null;
 
-$meta_action = $meta["action"];
-if ($meta_action !== "delete" && is_null($data)) {
-    return respondWithError("'entity' is not supported. Data is null for meta.action={$meta_action}");
-}
-
-if (is_null($meta_action)) {
-    return respondWithError("'action' is NULL");
-}
-$deal_id = $meta["entity_id"];
-$MAX_DEAL_ID = 110474;
-switch ($meta_action) {
-    case "delete":
-        processDelete($deal_id, $meta);
-        exit;
-
-    case "history_load":
-        if ($deal_id > $MAX_DEAL_ID || isAlreadyInDatabase($deal_id)) {
-            logAndExit("SKIPPED as id > {$MAX_DEAL_ID} or already processed", $meta);
+        if (is_null($meta)) {
+            return $this->respondWithError("'entity' is not supported. meta tag is null");
         }
-        break;
-}
 
-// Proceed with deal creation or update
-$toSQL=[];
-prepareSQLFields($data, $meta, $fieldNames);
-insertOrUpdateDeal($fieldNames, $deal_id);
-logFinalResult($meta);
-echo json_encode($result);
+        if ($meta_action !== "delete" && is_null($data)) {
+            return $this->respondWithError("'entity' is not supported. Data is null for meta.action={$meta_action}");
+        }
 
-// Functions
-function respondWithError($message)
-{
-    global $log, $logUrl;
-    $result["state"] = false;
-    $result["error"]["message"][] = $message;
-    $log["result"] = $result;
-    echo json_encode($result);
-    send_forward(json_encode($log), "{$logUrl}?state=false");
-    return false;
-}
+        if (is_null($meta_action)) {
+            return $this->respondWithError("'action' is NULL");
+        }
 
-function processDelete($dealId, $meta)
-{
-    global $result;
-    $sql = "DELETE FROM `deals` WHERE `deal_id` = '{$dealId}'";
-    executeQuery($sql, "delete");
-    logOperation($meta, 'deleted deal');
-    echo json_encode($result);
-}
-
-function isAlreadyInDatabase($deal_id)
-{
-    $sql = "SELECT `deal_id` FROM `deals` WHERE `deal_id` = {$deal_id}";
-    $query = executeQuery($sql,"is_already_in_database");
-    $row = mysqli_fetch_assoc($query);
-    return !is_null($row['deal_id']) && intval($row['deal_id']) == $deal_id;
-}
-
-function logAndExit($message, $meta)
-{
-    global $logUrl, $result, $log;
-    $log["history_load"] = $message;
-    logOperation($meta, 'SKIPPED request');
-    send_forward(json_encode($log), "{$logUrl}?state=false");
-    echo json_encode($result);
-    exit;
-}
-
-function prepareSQLFields($data, $meta, &$fieldNames)
-{
-    global $deal_id,$toSQL;
-    addMetaFields($meta, $fieldNames);
-
-    foreach ($data as $key => $value) {
-        if ($key == "id") continue;
-
-        if (str_contains($key, "custom_fields") && !is_null($value)) {
-            foreach ($value as $element_key => $element) {
-                if (!is_null($element["value"])) {
-                    $toSQL[] = "`{$element_key}` = '{$element["value"]}'";
-                    $fieldNames[] = $element_key;
+        switch ($meta_action) {
+            case "delete":
+                $this->processDelete($deal_id, $meta);
+                break;
+            case "history_load":
+                if ($deal_id > $this->MAX_DEAL_ID || $this->isAlreadyInDatabase($deal_id)) {
+                    $this->logAndExit("SKIPPED as id > {$this->MAX_DEAL_ID} or already processed", $meta);
                 }
+                break;
+        }
+        $this->prepareSQLFields($data, $meta);
+        $this->insertOrUpdateDeal($deal_id);
+        $this->logFinalResult($meta);
+        echo json_encode($this->result);
+    }
+
+    private function respondWithError($message)
+    {
+        $this->result["state"] = false;
+        $this->result["error"]["message"][] = $message;
+        $this->log["result"] = $this->result;
+        $this->sendForward(json_encode($this->log), "{$this->logUrl}?state=false");
+        echo json_encode($this->result);
+        exit;
+    }
+
+    private function processDelete($dealId, $meta)
+    {
+        $sql = "DELETE FROM `deals` WHERE `deal_id` = '{$dealId}'";
+        $this->executeQuery($sql, "delete");
+        $this->logOperation($meta, 'deleted deal');
+        echo json_encode($this->result);
+        exit;
+    }
+
+    private function isAlreadyInDatabase($deal_id)
+    {
+        $sql = "SELECT `deal_id` FROM `deals` WHERE `deal_id` = {$deal_id}";
+        $query = $this->executeQuery($sql, "is_already_in_database");
+        $row = mysqli_fetch_assoc($query);
+        return !is_null($row['deal_id']) && intval($row['deal_id']) == $deal_id;
+    }
+
+    private function logAndExit($message, $meta)
+    {
+        $this->log["history_load"] = $message;
+        $this->logOperation($meta, 'SKIPPED request');
+        $this->sendForward(json_encode($this->log), "{$this->logUrl}?state=false");
+        echo json_encode($this->result);
+        exit;
+    }
+
+    private function prepareSQLFields($data, $meta)
+    {
+        $this->addMetaFields($meta);
+        foreach ($data as $key => $value) {
+            if ($key == "id") continue;
+
+            if (str_contains($key, "custom_fields") && !is_null($value)) {
+                foreach ($value as $element_key => $element) {
+                    if (!is_null($element["value"])) {
+                        $this->toSQL[] = "`{$element_key}` = '{$element["value"]}'";
+                        $this->fieldNames[] = $element_key;
+                    }
+                }
+                continue;
             }
-            continue;
-        }
 
-        if (str_contains($key, "label_ids") && !is_null($value)) {
-            $toSQL[] = "`{$key}` = '" . implode(",", $value) . "'";
-            $fieldNames[] = $key;
-            continue;
-        }
+            if (str_contains($key, "label_ids") && !is_null($value)) {
+                $this->toSQL[] = "`{$key}` = '" . implode(",", $value) . "'";
+                $this->fieldNames[] = $key;
+                continue;
+            }
 
-        if (is_array($value)) continue;
+            if (!is_array($value)) continue;
 
-        if (str_contains($key, "_time") && !is_null($value)) {
-            addTimeFields($key, $value,$fieldNames);
-            continue;
-        }
+            if (str_contains($key,"_time") && !is_null($value)) {
+                $this->addTimeFields($key,$value);
+                continue;
+            }
 
-        if (!is_null($value)) {
-            $toSQL[] = "`{$key}` = '{$value}'";
-            $fieldNames[] = $key;
+            if (!is_null($value)) {
+                $this->toSQL[] = "`{$key}` = '{$value}'";
+                $this->fieldNames[] = $key;
+            }
+
         }
+    }
+
+    private function addMetaFields($meta)
+    {
+        $this->toSQL[] = "`deal_id` = '{$meta["entity_id"]}'";
+        $this->toSQL[] = "`correlation_id` = '{$meta["correlation_id"]}'";
+        $this->toSQL[] = "`meta_id` = '{$meta["id"]}'";
+        $this->fieldNames = array_merge($this->fieldNames, ["deal_id", "correlation_id", "meta_id"]);
+    }
+
+    private function insertOrUpdateDeal($dealId)
+    {
+        $this->checkAndCreateColumns();
+        $sql = "INSERT INTO `deals` SET " . implode(", ", $this->toSQL);
+        $this->executeQuery($sql, "insert");
+        $this->updateHistoryLoad($dealId);
+    }
+
+    private function checkAndCreateColumns()
+    {
+        $sql = "SHOW COLUMNS FROM `deals`";
+        $columns = array_column(mysqli_fetch_all(mysqli_query($this->sqlConnect, $sql), MYSQLI_ASSOC), "Field");
+
+        foreach ($this->fieldNames as $field) {
+            if (!in_array($field, $columns)) {
+                $this->createColumn($field);
+            }
+        }
+    }
+
+    private function createColumn($field)
+    {
+        $type = "TEXT";
+        if ($field === "f96ace3db32b364d4585d683d9ce708d128bdbd9") $type = "FLOAT";
+        elseif (ld == "2c5ec293caa3c168eeca24869b8b2a0da661710d" ||
+            $field == "1d609cb8de82b88497812f480c6c6b01859cd9c3" ||
+            $field == "ae74cc2b1fa13e336202e634ae1ce15db671ee83" ||
+            $field == "2084777055c8896173bf5046916a3a003c03abbe") $type = 'DATE';
+        elseif (str_ends_with($field, "_timeUnix") || str_ends_with($field, "_id")) $type = "BIGINT";
+        elseif (str_ends_with($field, "_time")) $type = "DATETIME";
+        $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($this->sqlConnect, $field) . "` {$type} AFTER `value`";
+        $this->executeQuery($sql, "createColumn");
+    }
+
+    private function executeQuery($sql, $type)
+    {
+        $query = mysqli_query($this->sqlConnect, $sql);
+        $this->log[$type] = [
+            "sql" => $sql,
+            "affected" => mysqli_affected_rows($this->sqlConnect),
+            "error" => mysqli_error($this->sqlConnect),
+        ];
+        return $query;
+    }
+
+    private function logOperation($meta, $description)
+    {
+        $sql = sprintf("INSERT INTO `loging` (`data`, `description`, `correlation_id`, `meta_id`) VALUES ('%s', '%s', '%s', '%s')",
+            mysqli_real_escape_string($this->sqlConnect, json_encode($this->log, JSON_UNESCAPED_UNICODE)),
+            $description,
+            $meta["correlation_id"],
+            $meta["id"]);
+        $this->executeQuery($sql, "logOperation");
+    }
+
+    private function updateHistoryLoad($dealId)
+    {
+        if ($this->input["meta"]["action"] !== "history_load") return;
+        $sql = "UPDATE `additional_values` SET `value` = {$dealId} WHERE `name` = 'history_load_last_id'";
+        $this->executeQuery($sql, "update_history_load");
+    }
+
+    private function logFinalResult($meta)
+    {
+        $this->logOperation($meta, 'Final result logged');
+    }
+
+    private function sendForward($data, $url)
+    {
+        send_forward();
+    }
+
+    private function addTimeFields($key, $value)
+    {
+        $sysTimeZone = date_default_timezone_get();
+        date_default_timezone_set("UTC");
+        $tempDate = strtotime($value);
+        date_default_timezone_set($sysTimeZone);
+
+        $this->toSQL[] = "`{$key}` = '" . date("Y-m-d H:i:s", $tempDate) . "'";
+        $this->toSQL[] = "`{$key}Unix` = '{$tempDate}'";
+
+        $this->fieldNames[] = $key;
+        $this->fieldNames[] = "{$key}Unix";
     }
 }
 
-function addMetaFields($meta, &$fieldNames)
-{
-    global $toSQL;
-    $toSQL[] = "`deal_id` = '{$meta["entity_id"]}'";
-    $toSQL[] = "`correlation_id` = '{$meta["correlation_id"]}'";
-    $toSQL[] = "`meta_id` = '{$meta["id"]}'";
 
-    $fieldNames[] = "deal_id";
-    $fieldNames[] = "correlation_id";
-    $fieldNames[] = "meta_id";
-}
-
-function addTimeFields($key, $value, &$fieldNames)
-{
-    global $toSQL;
-    $sysTimeZone = date_default_timezone_get();
-    date_default_timezone_set("UTC");
-    $tempDate = strtotime($value);
-    date_default_timezone_set($sysTimeZone);
-
-    $toSQL[] = "`{$key}` = '" . date("Y-m-d H:i:s", $tempDate) . "'";
-    $toSQL[] = "`{$key}Unix` = '{$tempDate}'";
-
-    $fieldNames[] = $key;
-    $fieldNames[] = "{$key}Unix";
-}
-
-function insertOrUpdateDeal( $fieldNames, $deal_Id)
-{
-    global $toSQL;
-    checkAndCreateColumns($fieldNames);
-    $sql = "INSERT INTO `deals` SET " . implode(", ", $toSQL);
-    executeQuery($sql, "insert");
-    updateHistoryLoad($deal_Id);
-}
-
-/**
- * @param $deal_Id
- * @return void
- */
-function updateHistoryLoad($deal_Id): void
-{
-    global $meta_action;
-    if($meta_action!="history_load"){
-        return;
-    }
-    $sql = "UPDATE `additional_values` SET `value` = {$deal_Id} WHERE `name` = 'history_load_last_id'";
-    executeQuery($sql,"update_history_load");
-}
-
-function checkAndCreateColumns($fieldNames)
-{
-    global $sqlConnect;
-    $sql = "SHOW COLUMNS FROM `deals`";
-    $columns = array_column(mysqli_fetch_all(mysqli_query($sqlConnect, $sql), MYSQLI_ASSOC), "Field");
-
-    foreach ($fieldNames as $field) {
-        if (!in_array($field, $columns)) {
-            createColumn($field);
-        }
-    }
-}
-
-function createColumn($field)
-{
-    global $sqlConnect;
-    $type = "TEXT";
-    if ($field === "f96ace3db32b364d4585d683d9ce708d128bdbd9") $type = "FLOAT";
-    elseif ($field == "2c5ec293caa3c168eeca24869b8b2a0da661710d" ||
-        $field == "1d609cb8de82b88497812f480c6c6b01859cd9c3" ||
-        $field == "ae74cc2b1fa13e336202e634ae1ce15db671ee83" ||
-        $field == "2084777055c8896173bf5046916a3a003c03abbe") $type = 'DATE';
-    elseif (str_ends_with($field, "_timeUnix") || str_ends_with($field, "_id")) $type = "BIGINT";
-    elseif (str_ends_with($field, "_time")) $type = "DATETIME";
-
-    $sql = "ALTER TABLE `deals` ADD `" . mysqli_real_escape_string($sqlConnect, $field) . "` {$type} AFTER `value`";
-    executeQuery($sql, "createColumn");
-}
-
-function executeQuery($sql, $type)
-{
-    global $sqlConnect, $log;
-    $query = mysqli_query($sqlConnect, $sql);
-    $log[$type] = [
-        "sql" => $sql,
-        "affected" => mysqli_affected_rows($sqlConnect),
-        "error" => mysqli_error($sqlConnect),
-    ];
-    return $query;
-}
-
-function logOperation($meta, $description)
-{
-    global $sqlConnect, $log, $logUrl;
-    $sql = sprintf("INSERT INTO `loging` (`data`, `description`, `correlation_id`, `meta_id`) VALUES ('%s', '%s', '%s', '%s')",
-        mysqli_real_escape_string($sqlConnect, json_encode($log, JSON_UNESCAPED_UNICODE)),
-        $description,
-        $meta["correlation_id"],
-        $meta["id"]);
-    $query = executeQuery($sql, "logOperation");
-    if (!$query) {
-        send_forward(json_encode($log), "{$logUrl}?state=false");
-    }
-}
-
-function logFinalResult($meta)
-{
-    logOperation($meta, 'Final result logged');
-}
 
 ?>
