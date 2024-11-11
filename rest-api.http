@@ -116,36 +116,117 @@ Content-Type: application/json
             "host":"naukroom.pipedrive.com"
          }
       }
-
-<> 2024-10-19T213038.200.json
-<> 2024-10-19T204138.200.json
-<> 2024-10-19T204116.200.json
-<> 2024-10-19T204041.200.json
-<> 2024-10-19T204040.200.json
-<> 2024-10-19T204039.200.json
-<> 2024-10-19T204038.200.json
-<> 2024-10-19T204037.200.json
-<> 2024-10-19T204036.200.json
-<> 2024-10-19T204035.200.json
-<> 2024-10-19T204034.200.json
-<> 2024-10-19T204033.200.json
-<> 2024-10-19T204024.200.json
-<> 2024-10-19T204016.200.json
-<> 2024-10-19T203848.200.json
-<> 2024-10-19T203810.200.json
-<> 2024-10-19T203629.200.json
-<> 2024-10-19T182910.200.json
-<> 2024-10-19T182423.200.json
-<> 2024-10-19T182151.200.json
-<> 2024-10-19T182138.200.json
-<> 2024-10-19T182041.200.json
-<> 2024-10-19T180832.200.html
-<> 2024-10-19T173915.200.json
-<> 2024-10-19T171307.200.json
-<> 2024-10-19T171146.200.json
-<> 2024-10-19T170900.200.json
-<> 2024-10-19T145453.200.json
-<> 2024-10-19T142506.200.html
-<> 2024-10-19T123345.200.json
-
 ###
+
+POST http://localhost:80/integration.php?XDEBUG_SESSION_START=IDEA_DEBUG&history_load=1
+Content-Type: application/json
+
+{
+  "data": {
+    "add_time": "2024-10-31T22:00:00Z",
+    "channel": null,
+    "channel_id": null,
+    "close_time": null,
+    "creator_user_id": 14865949,
+    "currency": "EUR",
+    "custom_fields": {
+      "6f5272dc7a994a1d8be52dd0c32a44f67bf07577": null,
+      "83cb75c5a12b4c1d288aa530b48e7fb8dfb43aa1": null,
+      "5214b62bac0a0a0673f435165e54b450d55c114f": {
+        "id": 74,
+        "type": "enum"
+      },
+      "e13dbda626c0dd08b456a5ea6739f9bcb8c30c9d": null,
+      "0de29ac675234af8847cecf456d2f73d2f9be6a3": null,
+      "4c9ca96c82facd48955d46bfb0162ba9dcfb694b": {
+        "type": "varchar",
+        "value": "comfort_intensive"
+      },
+      "a59b2d71191bd46d95ab56ca09ffe72f4a198479": null,
+      "e6b596f5cadccdb24f7abe30c2792a956efef177": null,
+      "69f6624b1dbfc0db499dc759cee8b4bc2a6eb8a9": null,
+      "db1f1cd968d317d146ac4ec537efb530083ea5e1": null,
+      "2084777055c8896173bf5046916a3a003c03abbe": {
+        "type": "date",
+        "value": "2024-11-01"
+      },
+      "e45835606d9db1b88c18ee1801ba6ea0a417a0ec": {
+        "id": 29,
+        "type": "enum"
+      },
+      "f96ace3db32b364d4585d683d9ce708d128bdbd9": null,
+      "ee4368d0a1abf1ce0ac563472429600d3b2b2d83": null,
+      "96b39a2c45987e802065f90d6f11cca1816518de": null,
+      "7a874eacd34673fb9c47e074ba9caa066a5460dd": null,
+      "0c6539ce7cf7d853f1eb48af21dcd64a9a4da149": null,
+      "ae74cc2b1fa13e336202e634ae1ce15db671ee83": null,
+      "bbfbd5b4f78c9a00c44f24043ca310eb247b26d9": null,
+      "ea21600944c328d6a45ee50368b6a3a465a24aa4": null,
+      "09ec58563213d27bf7f4ea7a64c44b825073ece4": null,
+      "24d280dc4466d09b472131264987e746a66589da": null,
+      "24ff42dcb45bd0184a69c4716c7baf06202fcf5f": null,
+      "43bc9463621a6f69f20ea7f12018521946797b53": null,
+      "d88705a61d5f8a109cab4994db7105734f6b4234": {
+        "type": "varchar",
+        "value": "Health-Демія"
+      },
+      "444e54cc039213dbd5c42a5a690e53c995ea54ba": {
+        "id": 72,
+        "type": "enum"
+      },
+      "8555f139de3d831c141f0623a431d8192d6777ef": null,
+      "ecd9e56159f9d2743f19a6d698b668ad69729ab7": null,
+      "33ad2fe2f55cb4e1b4c4ca315ab99d90b85a9344": null,
+      "6d50ee9c72b18ed2cbdd56045ac605f0c6206452": null,
+      "1d609cb8de82b88497812f480c6c6b01859cd9c3": null,
+      "4a4d15bb07af841b64983d275a4c3c484aba7602": null,
+      "abbf17122f45742850166f40cd52c00a96d6b13d": null,
+      "5c108613fefd2dd946ca6e52c347b356d3f9dc19": null,
+      "81ab95fa1f783eb1b5269759dcb10abba8835716": null,
+      "cdbfb8c7687eb13111a9af1a8c0121e998a295fe": null
+    },
+    "expected_close_date": null,
+    "first_won_time": null,
+    "id": 108979,
+    "label_ids": [],
+    "lost_reason": null,
+    "lost_time": null,
+    "org_id": null,
+    "origin": "ManuallyCreated",
+    "origin_id": null,
+    "owner_id": 21620248,
+    "person_id": 59537,
+    "pipeline_id": 2,
+    "probability": null,
+    "stage_change_time": "2024-11-04T14:31:37Z",
+    "stage_id": 21,
+    "status": "open",
+    "title": "Health-Демія - Комфорт",
+    "update_time": "2024-11-11T20:28:30Z",
+    "value": 166,
+    "visible_to": "3",
+    "won_time": null
+  },
+  "previous": {
+    "custom_fields": {
+      "e45835606d9db1b88c18ee1801ba6ea0a417a0ec": null
+    }
+  },
+  "meta": {
+    "action": "change",
+    "company_id": "10760661",
+    "correlation_id": "4f0b6c6f-f4c1-4a35-bb4b-e85d3841c095",
+    "entity_id": "108979",
+    "entity": "deal",
+    "id": "3d3f61f8-8013-4d55-8f53-27a6230aac5c",
+    "is_bulk_edit": false,
+    "timestamp": "2024-11-11T20:28:30.870Z",
+    "type": "general",
+    "user_id": "14082812",
+    "version": "2.0",
+    "webhook_id": "741075",
+    "webhook_owner_id": "14082812",
+    "attempt": 1,
+    "host": "naukroom.pipedrive.com"
+  }
+}

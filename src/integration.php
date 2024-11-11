@@ -2,9 +2,20 @@
 
 include("config.php");
 include("polyfill.php");
-$dealProcessor = new DealProcessor($sqlConnect, $logUrl);
+$input = json_decode(file_get_contents("php://input"), true);
 
-$dealProcessor->process();
+
+//foreach ($input as $input_deal) {
+$input_deal = $input;
+    $dealProcessor = new DealProcessor($sqlConnect, $logUrl,$input_deal);
+    $dealProcessor->process();
+//}
+exit;
+
+
+//$dealProcessor = new DealProcessor($sqlConnect, $logUrl);
+//
+//$dealProcessor->process();
 class DealProcessor
 {
     private $input;
@@ -16,9 +27,9 @@ class DealProcessor
     private $MAX_DEAL_ID = 110474;
     private $sqlConnect;
 
-    public function __construct($sqlConnect, $logUrl)
+    public function __construct($sqlConnect, $logUrl, $input_deal)
     {
-        $this->input = json_decode(file_get_contents("php://input"), true);
+        $this->input = $input_deal;
         $this->logUrl = $logUrl . "-webhook";
         $this->sqlConnect = $sqlConnect;
         $this->log["input"] = [
@@ -50,10 +61,12 @@ class DealProcessor
         switch ($meta_action) {
             case "delete":
                 $this->processDelete($deal_id, $meta);
+                return;
                 break;
             case "history_load":
                 if ($deal_id > $this->MAX_DEAL_ID || $this->isAlreadyInDatabase($deal_id)) {
                     $this->logAndExit("SKIPPED as id > {$this->MAX_DEAL_ID} or already processed", $meta);
+                    return;
                 }
                 break;
         }
@@ -70,7 +83,6 @@ class DealProcessor
         $this->log["result"] = $this->result;
         $this->sendForward(json_encode($this->log), "{$this->logUrl}?state=false");
         echo json_encode($this->result);
-        exit;
     }
 
     private function processDelete($dealId, $meta)
@@ -79,7 +91,6 @@ class DealProcessor
         $this->executeQuery($sql, "delete");
         $this->logOperation($meta, 'deleted deal');
         echo json_encode($this->result);
-        exit;
     }
 
     private function isAlreadyInDatabase($deal_id)
@@ -96,7 +107,6 @@ class DealProcessor
         $this->logOperation($meta, 'SKIPPED request');
         $this->sendForward(json_encode($this->log), "{$this->logUrl}?state=false");
         echo json_encode($this->result);
-        exit;
     }
 
     private function prepareSQLFields($data, $meta)
@@ -109,6 +119,9 @@ class DealProcessor
                 foreach ($value as $element_key => $element) {
                     if (!is_null($element["value"])) {
                         $this->toSQL[] = "`{$element_key}` = '{$element["value"]}'";
+                        $this->fieldNames[] = $element_key;
+                    }elseif(!is_null($element["id"]) && $element["type"] =="enum" ){
+                        $this->toSQL[] = "`{$element_key}` = '{$element["id"]}'";
                         $this->fieldNames[] = $element_key;
                     }
                 }
@@ -168,7 +181,7 @@ class DealProcessor
     {
         $type = "TEXT";
         if ($field === "f96ace3db32b364d4585d683d9ce708d128bdbd9") $type = "FLOAT";
-        elseif (ld == "2c5ec293caa3c168eeca24869b8b2a0da661710d" ||
+        elseif ($field == "2c5ec293caa3c168eeca24869b8b2a0da661710d" ||
             $field == "1d609cb8de82b88497812f480c6c6b01859cd9c3" ||
             $field == "ae74cc2b1fa13e336202e634ae1ce15db671ee83" ||
             $field == "2084777055c8896173bf5046916a3a003c03abbe") $type = 'DATE';
