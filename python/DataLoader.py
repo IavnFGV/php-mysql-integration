@@ -64,11 +64,12 @@ for deal in mycol.find({}):
     meta = {"action":"history_load","entity_id":deal["id"],"correlation_id":deal['correlation_id'],"id":str(uuid.uuid4())}
     del deal['correlation_id']
     envelope["meta"]=meta
-    URL = "https://mufiksoft.com/naukroom2/integration.php"
+    # URL = "https://mufiksoft.com/naukroom2/integration.php"
     # URL = "http://localhost:80/integration.php"
     # PARAMS = {'XDEBUG_SESSION_START':"IDEA_DEBUG"}
     print(envelope)
-    r = requests.post(url = URL,params={}, json = envelope)
+    # r = requests.post(url = URL,params=PARAMS, json = envelope)
+    r = requests.post(url = URL, json = envelope)
 
 # mycol.update({"id":1},{"$set":{"correlation_id":str(uuid.uuid4())}})
 

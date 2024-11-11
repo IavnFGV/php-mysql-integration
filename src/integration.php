@@ -121,7 +121,7 @@ class DealProcessor
                 continue;
             }
 
-            if (!is_array($value)) continue;
+            if (is_array($value)) continue;
 
             if (str_contains($key,"_time") && !is_null($value)) {
                 $this->addTimeFields($key,$value);
