@@ -5,11 +5,17 @@ include("polyfill.php");
 $input = json_decode(file_get_contents("php://input"), true);
 
 
-//foreach ($input as $input_deal) {
-$input_deal = $input;
-    $dealProcessor = new DealProcessor($sqlConnect, $logUrl,$input_deal);
+if ($_GET["history_load"] != null) {
+    foreach ($input as $input_deal) {
+        $dealProcessor = new DealProcessor($sqlConnect, $logUrl, $input_deal);
+        $dealProcessor->process();
+    }
+    exit;
+} else {
+    $dealProcessor = new DealProcessor($sqlConnect, $logUrl, $input);
     $dealProcessor->process();
-//}
+}
+
 exit;
 
 
@@ -24,7 +30,6 @@ class DealProcessor
     private $result = ["state" => true];
     private $toSQL = [];
     private $fieldNames = [];
-    private $MAX_DEAL_ID = 110474;
     private $sqlConnect;
 
     public function __construct($sqlConnect, $logUrl, $input_deal)
@@ -63,12 +68,12 @@ class DealProcessor
                 $this->processDelete($deal_id, $meta);
                 return;
                 break;
-            case "history_load":
-                if ($deal_id > $this->MAX_DEAL_ID || $this->isAlreadyInDatabase($deal_id)) {
-                    $this->logAndExit("SKIPPED as id > {$this->MAX_DEAL_ID} or already processed", $meta);
-                    return;
-                }
-                break;
+//            case "history_load":
+//                if ($this->isAlreadyInDatabase($deal_id)) {
+//                    $this->logAndExit("SKIPPED as id > {$this->MAX_DEAL_ID} or already processed", $meta);
+//                    return;
+//                }
+//                break;
         }
         $this->prepareSQLFields($data, $meta);
         $this->insertOrUpdateDeal($deal_id);
@@ -118,9 +123,9 @@ class DealProcessor
             if (str_contains($key, "custom_fields") && !is_null($value)) {
                 foreach ($value as $element_key => $element) {
                     if (!is_null($element["value"])) {
-                        $this->toSQL[] = "`{$element_key}` = '{$element["value"]}'";
+                        $this->toSQL[] = "`{$element_key}` = '".mysqli_real_escape_string($this->sqlConnect,$element["value"])."'";
                         $this->fieldNames[] = $element_key;
-                    }elseif(!is_null($element["id"]) && $element["type"] =="enum" ){
+                    } elseif (!is_null($element["id"]) && $element["type"] == "enum") {
                         $this->toSQL[] = "`{$element_key}` = '{$element["id"]}'";
                         $this->fieldNames[] = $element_key;
                     }
@@ -136,13 +141,19 @@ class DealProcessor
 
             if (is_array($value)) continue;
 
-            if (str_contains($key,"_time") && !is_null($value)) {
-                $this->addTimeFields($key,$value);
+            if (str_contains($key, "_time") && !is_null($value)) {
+                $this->addTimeFields($key, $value);
                 continue;
             }
 
             if (!is_null($value)) {
-                $this->toSQL[] = "`{$key}` = '{$value}'";
+                if (gettype($value) == "string"){
+                    $escaped_value = mysqli_real_escape_string($this->sqlConnect,$value);
+                    $this->toSQL[] = "`{$key}` = '{$escaped_value}'";
+
+                }else{
+                    $this->toSQL[] = "`{$key}` = '{$value}'";
+                }
                 $this->fieldNames[] = $key;
             }
 
@@ -204,11 +215,13 @@ class DealProcessor
 
     private function logOperation($meta, $description)
     {
-        $sql = sprintf("INSERT INTO `loging` (`data`, `description`, `correlation_id`, `meta_id`) VALUES ('%s', '%s', '%s', '%s')",
+        $sql = sprintf("INSERT INTO `loging` (`data`, `description`, `correlation_id`, `meta_id`,`deal_id`) VALUES ('%s', '%s', '%s', '%s', %s)",
             mysqli_real_escape_string($this->sqlConnect, json_encode($this->log, JSON_UNESCAPED_UNICODE)),
             $description,
             $meta["correlation_id"],
-            $meta["id"]);
+            $meta["id"],
+            $meta["entity_id"]
+        );
         $this->executeQuery($sql, "logOperation");
     }
 
@@ -243,7 +256,6 @@ class DealProcessor
         $this->fieldNames[] = "{$key}Unix";
     }
 }
-
 
 
 ?>

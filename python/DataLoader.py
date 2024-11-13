@@ -18,6 +18,8 @@ mydb = myclient["naukroom"]
 mycol = mydb["deals"]
 
 
+
+
 end_id =102818-1
 
 def pushDataToCollection(deal):
@@ -70,11 +72,11 @@ def remapCustomFields(deal):
 
 total =  mycol.count_documents({})
 count =0
-lastSeen =98501
+lastSeen =0
 count+=lastSeen
 while (count < total):
     batch = []
-    for deal in mycol.find({"id": { "$gt": lastSeen }}).sort({"id":1}).batch_size(1000).limit(1000):
+    for deal in mycol.find({"id": { "$gt": lastSeen }}).sort({"id":1}).batch_size(2000).limit(2000):
         count += 1
         lastSeen =deal["_id"]
         del deal["_id"]
@@ -88,19 +90,22 @@ while (count < total):
     print(count)
     if len(batch) == 0:
         exit()
-    URL = "https://mufiksoft.com/naukroom2/integration.php"
-    r = requests.post(url = URL, json = batch)
+    # URL = "https://mufiksoft.com/naukroom2/integration.php"
+    # r = requests.post(url = URL, json = batch)
 
 
     # if(count % 300 == 0) or (count >=total):
-    # URL = "http://localhost:80/integration.php"
-    # PARAMS = {'XDEBUG_SESSION_START':"IDEA_DEBUG"}
-    # r = requests.post(url = URL,params=PARAMS, json = batch)
+    URL = "http://localhost:80/integration.php"
+    PARAMS = {"history_load":1}
+    # PARAMS = {'XDEBUG_SESSION_START':"IDEA_DEBUG","history_load":1}
+    r = requests.post(url = URL,params=PARAMS, json = batch)
 
 
 
 # mycol.update({"id":1},{"$set":{"correlation_id":str(uuid.uuid4())}})
 
+
+# mycol.find({"correlation_id":{"$exists":False}},{"id":1})
 # mycol = mycol.create_index({"id":1})
 # for i in range(110705,110706):
 #     mycol.update_one({"id":i},{"$set":{"correlation_id":str(uuid.uuid4())}})
@@ -108,3 +113,14 @@ while (count < total):
 #         print(i)
 
 
+# list1=[]
+# for elem in mycol.find({"correlation_id":{"$exists":False}},{"id":1}):
+#     list1.append(elem["id"])
+#
+# print(list1)
+#
+# for i in list1:
+#     mycol.update_one({"id":i},{"$set":{"correlation_id":str(uuid.uuid4())}})
+#     if(i % 100 == 0):
+#         print(i)
+# exit()

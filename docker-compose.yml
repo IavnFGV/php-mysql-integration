@@ -17,6 +17,7 @@ services:
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./mysqldumpfolder:/mysqldumpfolder
     ports:
       - "33060:3306"
   mongodb_container:

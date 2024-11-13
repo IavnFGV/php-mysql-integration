@@ -4,7 +4,9 @@ import requests
 
 URL = "https://naukroom.pipedrive.com/api/v1/deals/collection"
 PARAMS = {'api_token':"215ffd56e56bb4227a0fe87363223d8aae4ddc25",
-          "limit":500}
+          "limit":500,
+          "since":"2024-11-09 15:00:00",
+          "until":"2024-11-11 22:55:00"}
 
 def packCustomFields(deal):
     tempDict = {}
@@ -28,7 +30,7 @@ def iterateOverDeals(callBack):
         for deal in data:
             packCustomFields(deal)
             continue_processing = callBack(deal)
-        repeat = (cursor is not None) and (continue_processing)
+        repeat = (cursor is not None) and continue_processing
         sleep(0.05)
 
 
